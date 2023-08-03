@@ -12,10 +12,16 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"io"
+	"mime/multipart"
 	"strings"
 )
 
+type NetWorkLogger struct{}
+
 func main() {
+	server := gin.Default()
+
 	//加载xdb
 	var dbPath = "ip2region.xdb"
 	// 1、从 dbPath 加载整个 xdb 到内存
@@ -32,7 +38,7 @@ func main() {
 		return
 	}
 	//创建一个服务
-	server := gin.Default()
+
 	server.GET("/hello", func(context *gin.Context) {
 		context.JSON(200, gin.H{"msg": "hello,world"})
 
@@ -46,6 +52,7 @@ func main() {
 		types := m["type"].(string)
 		msg := m["msg"].(string)
 		fmt.Println(types)
+
 		switch types {
 		case "getip":
 			region, err := Searcher.SearchByStr(msg) //查询Ip位置
@@ -68,10 +75,65 @@ func main() {
 
 	})
 
+	server.POST("/getimage", func(context *gin.Context) {
+
+		file, err := context.FormFile("image")
+		if err != nil {
+			context.JSON(201, gin.H{"msg": "获取图像失败"})
+
+			return
+		}
+		imageFile, err := file.Open()
+		if err != nil {
+			context.JSON(201, gin.H{"msg": "无法打开图像文件"})
+			return
+		}
+		imageData, err := io.ReadAll(imageFile)
+		if err != nil {
+			context.JSON(201, gin.H{"msg": "无法读取图像数据"})
+			return
+		}
+		img, _, _ := image.Decode(bytes.NewReader(imageData))
+		fmt.Println("处理图片请求!!!!!")
+		array := []int{39, 38, 48, 49, 41, 40, 46, 47, 35, 34, 50, 51, 33, 32, 28, 29, 27, 26, 36, 37, 31, 30, 44, 45, 43, 42, 12, 13, 23, 22, 14, 15, 21, 20, 8, 9, 25, 24, 6, 7, 3, 2, 0, 1, 11, 10, 4, 5, 19, 18, 16, 17}
+
+		convertedImage := image.NewRGBA(image.Rect(0, 0, 312, 160))
+		//
+
+		for i := 0; i < len(array); i++ {
+			c := array[i]%26*12 + 1
+			fmt.Println(c)
+			u := 0
+			db := 0
+
+			if array[i] > 25 {
+				u = 80
+			} else {
+				u = 0
+			}
+
+			if i > 25 {
+				db = 80
+			} else {
+				db = 0
+			}
+			copyImage(convertedImage, img, i%26*10, db, c, u, 10, 80)
+			// 使用 array[i] 进行操作
+		}
+		defer func(imageFile multipart.File) {
+			err := imageFile.Close()
+			if err != nil {
+			}
+		}(imageFile)
+		buffer := new(bytes.Buffer)
+		jpeg.Encode(buffer, convertedImage, nil)
+		context.Data(200, "image/jpeg", buffer.Bytes())
+	})
 	err = server.Run(":8082")
 	if err != nil {
 		return
 	}
+
 }
 
 func geetest(base64 string) (string, error) {
